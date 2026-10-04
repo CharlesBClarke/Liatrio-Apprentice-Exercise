@@ -4,10 +4,10 @@ A simple Go web application built with [Fiber](https://gofiber.io/) that exposes
 
 ## Endpoint
 
-`GET /` returns a minified JSON object with a message and the current Unix timestamp in seconds:
+`GET /` returns a minified JSON object with a message and the current Unix timestamp in milliseconds:
 
 ```json
-{"message":"My name is Charles Clarke","timestamp":1791083402}
+{"message":"My name is Charles Clarke","timestamp":1791083402000}
 ```
 
 ## Tech Stack
