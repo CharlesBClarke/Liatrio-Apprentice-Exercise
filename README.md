@@ -53,7 +53,7 @@ The final image is about 28 MB, compared to about 381 MB for the Go build image,
 
 - [x] Go + Fiber JSON endpoint
 - [x] Dockerfile
-- [ ] GitHub Actions workflow: build, test with apprentice-action, push to Docker Hub
-- [ ] Unique image versioning
+- [x] GitHub Actions workflow: build, test with apprentice-action, push to Docker Hub
+- [x] Unique image versioning
 - [ ] Cloud deployment
 - [ ] Automatic deployment on merge to master

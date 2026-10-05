@@ -30,6 +30,25 @@ jobs:
           echo "Response: $body"
           test "$body" = "$(echo "$body" | jq --compact-output .)"
 
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Tag and push image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise
+        run: |
+          VERSION="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          docker tag liatrio-exercise:ci "$IMAGE:$VERSION"
+          docker tag liatrio-exercise:ci "$IMAGE:latest"
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"
+          echo "Pushed version $VERSION" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Show container logs
         if: always()
         run: docker logs app
