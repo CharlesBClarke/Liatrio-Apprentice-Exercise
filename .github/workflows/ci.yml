@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Build Docker image
+        run: docker build -t liatrio-exercise:ci .
+
+      - name: Run container
+        run: |
+          docker run -d --name app -p 80:80 liatrio-exercise:ci
+          curl --silent --fail --retry 10 --retry-connrefused --retry-delay 1 http://localhost:80/ > /dev/null
+
+      - name: Run apprentice-action tests
+        uses: liatrio/github-actions/apprentice-action@0b41561cca6822cc8d880fe0e49e7807a41fdf91
+
+      - name: Verify response is minified JSON
+        run: |
+          body=$(curl --silent --fail http://localhost:80/)
+          echo "Response: $body"
+          test "$body" = "$(echo "$body" | jq --compact-output .)"
+
+      - name: Show container logs
+        if: always()
+        run: docker logs app
