@@ -5,7 +5,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o /server .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION}" -o /server .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /server /server
