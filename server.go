@@ -7,6 +7,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+var version = "dev"
+
 func main() {
 	app := fiber.New()
 
@@ -14,6 +16,7 @@ func main() {
 		return c.JSON(fiber.Map{
 			"message":   "My name is Charles Clarke",
 			"timestamp": time.Now().UnixMilli(),
+			"version":   version,
 		})
 	})
 

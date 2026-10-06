@@ -6,10 +6,10 @@ A simple Go web application built with [Fiber](https://gofiber.io/) that exposes
 
 ## Endpoint
 
-`GET /` returns a minified JSON object with a message and the current Unix timestamp in milliseconds:
+`GET /` returns a minified JSON object with a message, the current Unix timestamp in milliseconds, and the version of the running build:
 
 ```json
-{"message":"My name is Charles Clarke","timestamp":1791083402000}
+{"message":"My name is Charles Clarke","timestamp":1791083402000,"version":"9-abc1234"}
 ```
 
 ## Tech Stack
@@ -42,7 +42,7 @@ docker run --rm -p 8080:80 liatrio-exercise:dev
 curl -i localhost:8080/
 ```
 
-The `-p 8080:80` flag maps port 8080 on your machine to port 80 inside the container.
+The `-p 8080:80` flag maps port 8080 on your machine to port 80 inside the container. Local builds report `"version":"dev"`; pass `--build-arg VERSION=<value>` to set it.
 
 ## Docker Image
 
@@ -59,13 +59,13 @@ Every pull request and push to `master` runs `.github/workflows/ci.yml`:
 
 1. Build the Docker image and run it on port 80
 2. Test it with Liatrio's apprentice-action, pinned to the v1.0.0 commit SHA
-3. Verify the response is minified JSON with `jq`
+3. Verify the response is minified JSON and reports the build version, using `jq`
 
 On a push to `master`, after the tests pass:
 
 4. Push the image to Docker Hub tagged `<run number>-<short SHA>` and `latest`
 5. Deploy that versioned image to Cloud Run, authenticating with Workload Identity Federation instead of a stored key
-6. Verify the deployed image tag and that the live endpoint responds
+6. Verify the deployed image tag and that the live endpoint reports the new version
 
 ## Progress
 

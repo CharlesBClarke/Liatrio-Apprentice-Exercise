@@ -10,13 +10,17 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.push.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Set version
+        id: version
+        run: echo "version=${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Build Docker image
-        run: docker build -t liatrio-exercise:ci .
+        run: docker build --build-arg VERSION=${{ steps.version.outputs.version }} -t liatrio-exercise:ci .
 
       - name: Run container
         run: |
@@ -32,6 +36,9 @@ jobs:
           echo "Response: $body"
           test "$body" = "$(echo "$body" | jq --compact-output .)"
 
+      - name: Verify response reports the build version
+        run: curl --silent --fail http://localhost:80/ | jq --exit-status --arg v "${{ steps.version.outputs.version }}" '.version == $v'
+
       - name: Log in to Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
@@ -40,18 +47,16 @@ jobs:
         run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
       - name: Tag and push image
-        id: push
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
           docker tag liatrio-exercise:ci "$IMAGE:$VERSION"
           docker tag liatrio-exercise:ci "$IMAGE:latest"
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
           echo "Pushed version $VERSION" >> "$GITHUB_STEP_SUMMARY"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Show container logs
         if: always()
@@ -68,6 +73,7 @@ jobs:
       CLOUDSDK_CORE_PROJECT: liatrio-exercise-510800
       SERVICE: liatrio-exercise
       REGION: us-west1
+      VERSION: ${{ needs.build-and-test.outputs.version }}
       IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise:${{ needs.build-and-test.outputs.version }}
     steps:
       - name: Authenticate to Google Cloud
@@ -88,5 +94,5 @@ jobs:
           echo "Deployed image: $deployed"
           test "$deployed" = "$IMAGE"
           url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
-          curl --silent --fail "$url/" | tee /dev/stderr | jq --exit-status '.message and .timestamp' > /dev/null
-          echo "Deployed ${{ needs.build-and-test.outputs.version }} to $url" >> "$GITHUB_STEP_SUMMARY"
+          curl --silent --fail "$url/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.message and .timestamp and .version == $v' > /dev/null
+          echo "Deployed $VERSION to $url" >> "$GITHUB_STEP_SUMMARY"
