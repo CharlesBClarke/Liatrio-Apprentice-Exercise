@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.push.outputs.version }}
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -38,6 +40,7 @@ jobs:
         run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
       - name: Tag and push image
+        id: push
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise
@@ -48,7 +51,42 @@ jobs:
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
           echo "Pushed version $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Show container logs
         if: always()
         run: docker logs app
+
+  deploy:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLOUDSDK_CORE_PROJECT: liatrio-exercise-510800
+      SERVICE: liatrio-exercise
+      REGION: us-west1
+      IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise:${{ needs.build-and-test.outputs.version }}
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/16535386241/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@liatrio-exercise-510800.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+      - name: Deploy to Cloud Run
+        run: gcloud run deploy "$SERVICE" --image "$IMAGE" --region "$REGION" --quiet
+
+      - name: Verify deployment
+        run: |
+          deployed=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(spec.template.spec.containers[0].image)')
+          echo "Deployed image: $deployed"
+          test "$deployed" = "$IMAGE"
+          url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
+          curl --silent --fail "$url/" | tee /dev/stderr | jq --exit-status '.message and .timestamp' > /dev/null
+          echo "Deployed ${{ needs.build-and-test.outputs.version }} to $url" >> "$GITHUB_STEP_SUMMARY"
