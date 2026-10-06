@@ -2,6 +2,8 @@
 
 A simple Go web application built with [Fiber](https://gofiber.io/) that exposes a single HTTP endpoint, packaged as a Docker image and delivered through a CI/CD pipeline.
 
+**Live:** https://liatrio-exercise-16535386241.us-west1.run.app
+
 ## Endpoint
 
 `GET /` returns a minified JSON object with a message and the current Unix timestamp in milliseconds:
@@ -14,7 +16,9 @@ A simple Go web application built with [Fiber](https://gofiber.io/) that exposes
 
 - **Go** with the **Fiber v3** web framework
 - **Docker** multi-stage build on a distroless base image
-- **GitHub Actions** for CI/CD (in progress)
+- **GitHub Actions** for CI/CD
+- **Docker Hub** image registry
+- **Google Cloud Run** hosting
 
 ## Running Locally
 
@@ -49,11 +53,25 @@ The Dockerfile uses a multi-stage build:
 
 The final image is about 28 MB, compared to about 381 MB for the Go build image, and has no shell or package manager, which reduces its attack surface.
 
+## CI/CD Pipeline
+
+Every pull request and push to `master` runs `.github/workflows/ci.yml`:
+
+1. Build the Docker image and run it on port 80
+2. Test it with Liatrio's apprentice-action, pinned to the v1.0.0 commit SHA
+3. Verify the response is minified JSON with `jq`
+
+On a push to `master`, after the tests pass:
+
+4. Push the image to Docker Hub tagged `<run number>-<short SHA>` and `latest`
+5. Deploy that versioned image to Cloud Run, authenticating with Workload Identity Federation instead of a stored key
+6. Verify the deployed image tag and that the live endpoint responds
+
 ## Progress
 
 - [x] Go + Fiber JSON endpoint
 - [x] Dockerfile
 - [x] GitHub Actions workflow: build, test with apprentice-action, push to Docker Hub
 - [x] Unique image versioning
-- [ ] Cloud deployment
-- [ ] Automatic deployment on merge to master
+- [x] Cloud deployment
+- [x] Automatic deployment on merge to master
