@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [master]
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -66,6 +70,9 @@ jobs:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -85,14 +92,25 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
 
-      - name: Deploy to Cloud Run
-        run: gcloud run deploy "$SERVICE" --image "$IMAGE" --region "$REGION" --quiet
+      - name: Deploy candidate with no traffic
+        run: gcloud run deploy "$SERVICE" --image "$IMAGE" --region "$REGION" --no-traffic --tag candidate --quiet
 
-      - name: Verify deployment
+      - name: Find candidate revision
+        id: candidate
         run: |
-          deployed=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(spec.template.spec.containers[0].image)')
-          echo "Deployed image: $deployed"
-          test "$deployed" = "$IMAGE"
+          traffic=$(gcloud run services describe "$SERVICE" --region "$REGION" --format=json | jq '.status.traffic[] | select(.tag == "candidate")')
+          echo "url=$(echo "$traffic" | jq --raw-output .url)" >> "$GITHUB_OUTPUT"
+          echo "revision=$(echo "$traffic" | jq --raw-output .revisionName)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify candidate
+        run: |
+          curl --silent --fail "${{ steps.candidate.outputs.url }}/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.message and .timestamp and .version == $v' > /dev/null
+
+      - name: Promote candidate to all traffic
+        run: gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=100" --quiet
+
+      - name: Verify live service
+        run: |
           url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
-          curl --silent --fail "$url/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.message and .timestamp and .version == $v' > /dev/null
+          curl --silent --fail "$url/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.version == $v' > /dev/null
           echo "Deployed $VERSION to $url" >> "$GITHUB_STEP_SUMMARY"
