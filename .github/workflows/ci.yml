@@ -92,6 +92,15 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
 
+      - name: Find stable revision
+        id: stable
+        run: |
+          service=$(gcloud run services describe "$SERVICE" --region "$REGION" --format=json)
+          revision=$(echo "$service" | jq --raw-output '[.status.traffic[] | select(.percent == 100)][0].revisionName // empty')
+          echo "Stable revision: $revision"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "url=$(echo "$service" | jq --raw-output .status.url)" >> "$GITHUB_OUTPUT"
+
       - name: Deploy candidate with no traffic
         run: gcloud run deploy "$SERVICE" --image "$IMAGE" --region "$REGION" --no-traffic --tag candidate --quiet
 
@@ -106,6 +115,16 @@ jobs:
         run: |
           curl --silent --fail "${{ steps.candidate.outputs.url }}/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.message and .timestamp and .version == $v' > /dev/null
 
+      - name: Canary 10%
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=10,${{ steps.stable.outputs.revision }}=90" --quiet
+          .github/scripts/canary-probe.sh "${{ steps.stable.outputs.url }}" "$VERSION" 60 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Canary 50%
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=50,${{ steps.stable.outputs.revision }}=50" --quiet
+          .github/scripts/canary-probe.sh "${{ steps.stable.outputs.url }}" "$VERSION" 60 | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Promote candidate to all traffic
         run: gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=100" --quiet
 
@@ -114,3 +133,9 @@ jobs:
           url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
           curl --silent --fail "$url/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.version == $v' > /dev/null
           echo "Deployed $VERSION to $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Roll back to stable revision
+        if: failure() && steps.stable.outputs.revision != ''
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.stable.outputs.revision }}=100" --quiet
+          echo "Rolled back to ${{ steps.stable.outputs.revision }}" >> "$GITHUB_STEP_SUMMARY"
