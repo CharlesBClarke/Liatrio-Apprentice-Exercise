@@ -119,7 +119,9 @@ jobs:
           curl --silent --fail "${{ steps.candidate.outputs.url }}/" | tee /dev/stderr | jq --exit-status --arg v "$VERSION" '.message and .timestamp and .version == $v' > /dev/null
 
       - name: Canary 10%
+        id: canary
         run: |
+          echo "start=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=10,${{ steps.stable.outputs.revision }}=90" --quiet
           .github/scripts/canary-probe.sh "${{ steps.stable.outputs.url }}" "$VERSION" 60 | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -127,6 +129,9 @@ jobs:
         run: |
           gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=50,${{ steps.stable.outputs.revision }}=50" --quiet
           .github/scripts/canary-probe.sh "${{ steps.stable.outputs.url }}" "$VERSION" 60 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare canary metrics with stable
+        run: .github/scripts/canary-metrics.sh "$CLOUDSDK_CORE_PROJECT" "$SERVICE" "${{ steps.stable.outputs.revision }}" "${{ steps.candidate.outputs.revision }}" "${{ steps.canary.outputs.start }}" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Promote candidate to all traffic
         run: gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-revisions "${{ steps.candidate.outputs.revision }}=100" --quiet

@@ -64,8 +64,15 @@ Every pull request and push to `master` runs `.github/workflows/ci.yml`:
 On a push to `master`, after the tests pass:
 
 4. Push the image to Docker Hub tagged `<run number>-<short SHA>` and `latest`
-5. Deploy that versioned image to Cloud Run, authenticating with Workload Identity Federation instead of a stored key
-6. Verify the deployed image tag and that the live endpoint reports the new version
+5. Deploy that versioned image to Cloud Run as a candidate revision with no traffic, authenticating with Workload Identity Federation instead of a stored key
+6. Verify the candidate through its tagged URL
+7. Canary rollout: send 10% and then 50% of traffic to the candidate while `.github/scripts/canary-probe.sh` sends requests and checks every response
+8. Compare the candidate's 5xx rate and p95 latency against the stable revision using Cloud Monitoring metrics (`.github/scripts/canary-metrics.sh`)
+9. Promote the candidate to 100% and verify the live endpoint reports the new version
+
+If any deploy step fails, traffic is rolled back to the previous stable revision.
+
+The metrics check fails if the candidate's 5xx rate is more than 1 percentage point above stable, or if its p95 latency is over 100 ms and more than twice stable's. Cloud Monitoring data can take a few minutes to appear, so the script waits until both revisions have at least 100 recorded requests, and fails after 6 minutes without them.
 
 ## Progress
 
