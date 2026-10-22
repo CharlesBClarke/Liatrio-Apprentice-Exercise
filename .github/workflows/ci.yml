@@ -105,7 +105,7 @@ jobs:
           echo "url=$(echo "$service" | jq --raw-output .status.url)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy candidate with no traffic
-        run: gcloud run deploy "$SERVICE" --image "$IMAGE" --region "$REGION" --no-traffic --tag candidate --quiet
+        run: gcloud run deploy "$SERVICE" --image "$IMAGE" --region "$REGION" --max-instances 3 --no-traffic --tag candidate --quiet
 
       - name: Find candidate revision
         id: candidate

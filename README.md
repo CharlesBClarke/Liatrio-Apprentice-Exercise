@@ -66,9 +66,11 @@ On a push to `master`, after the tests pass:
 4. Push the image to Docker Hub tagged `<run number>-<short SHA>` and `latest`
 5. Deploy that versioned image to Cloud Run as a candidate revision with no traffic, authenticating with Workload Identity Federation instead of a stored key
 6. Verify the candidate through its tagged URL
-7. Canary rollout: send 10% and then 50% of traffic to the candidate while `.github/scripts/canary-probe.sh` sends requests and checks every response
+7. Canary rollout: send 10% and then 50% of traffic to the candidate while `.github/scripts/canary-probe.sh` sends requests and checks every response (fails on any bad JSON, if more than 2% of requests fail, or if it never sees both versions)
 8. Compare the candidate's 5xx rate and p95 latency against the stable revision using Cloud Monitoring metrics (`.github/scripts/canary-metrics.sh`)
 9. Promote the candidate to 100% and verify the live endpoint reports the new version
+
+The probe allows a few failed requests because it can't tell which revision served a failed request, so one blip on the stable revision would otherwise roll back a healthy candidate. Comparing error rates per revision is the metrics check's job. Revisions deploy with `--max-instances 3` so swapping an instance doesn't leave zero capacity.
 
 If any deploy step fails, traffic is rolled back to the previous stable revision.
 
