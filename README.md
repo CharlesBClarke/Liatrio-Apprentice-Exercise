@@ -74,6 +74,8 @@ The probe allows a few failed requests because it can't tell which revision serv
 
 If any deploy step fails, traffic is rolled back to the previous stable revision.
 
+Cloud Run pulls the Docker Hub image through an Artifact Registry remote repository (`us-west1-docker.pkg.dev/liatrio-exercise-510800/dockerhub`) that proxies Docker Hub. Pulling `docker.io` images directly goes through Google's shared `mirror.gcr.io` cache, which returned "image not found" for freshly pushed tags until it eventually caught up, sometimes hours later.
+
 The metrics check fails if the candidate's 5xx rate is more than 1 percentage point above stable, or if its p95 latency is over 100 ms and more than twice stable's. Cloud Monitoring data can take a few minutes to appear, so the script waits until both revisions have at least 100 recorded requests, and fails after 6 minutes without them.
 
 ## Progress

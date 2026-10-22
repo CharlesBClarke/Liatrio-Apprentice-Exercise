@@ -81,7 +81,7 @@ jobs:
       SERVICE: liatrio-exercise
       REGION: us-west1
       VERSION: ${{ needs.build-and-test.outputs.version }}
-      IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise:${{ needs.build-and-test.outputs.version }}
+      IMAGE: us-west1-docker.pkg.dev/liatrio-exercise-510800/dockerhub/${{ secrets.DOCKERHUB_USERNAME }}/liatrio-apprentice-exercise:${{ needs.build-and-test.outputs.version }}
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
